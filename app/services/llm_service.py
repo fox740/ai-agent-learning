@@ -4,6 +4,8 @@ from openai import OpenAI
 
 from app.core.config import get_settings
 
+from collections.abc import Iterator
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,3 +63,59 @@ class LLMService:
             return ""
 
         return content
+    def stream_generate(self, user_message: str) -> Iterator[str]:
+        if self.settings.llm_provider == "mock":
+            yield from self._mock_stream_generate(user_message)
+            return
+
+        yield from self._openai_compatible_stream_generate(user_message)
+
+    def _mock_stream_generate(self, user_message: str) -> Iterator[str]:
+        logger.info("Using mock streaming LLM provider")
+
+        text = f"这是 mock 流式回复：我收到了你的问题：{user_message}"
+
+        for char in text:
+            yield char   
+
+
+    def _openai_compatible_stream_generate(self, user_message: str) -> Iterator[str]:
+        if not self.settings.llm_api_key or self.settings.llm_api_key == "your_api_key_here":
+            raise ValueError("LLM_API_KEY is not configured")
+
+        client_kwargs = {
+            "api_key": self.settings.llm_api_key,
+        }
+
+        if self.settings.llm_base_url:
+            client_kwargs["base_url"] = self.settings.llm_base_url
+
+        client = OpenAI(**client_kwargs)
+
+        logger.info(
+            "Streaming LLM provider=%s model=%s",
+            self.settings.llm_provider,
+            self.settings.llm_model,
+        )
+
+        stream = client.chat.completions.create(
+            model=self.settings.llm_model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "你是一个严谨、清晰、耐心的 AI 学习助手。",
+                },
+                {
+                    "role": "user",
+                    "content": user_message,
+                },
+            ],
+            temperature=0.7,
+            stream=True,
+        )
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
+    
