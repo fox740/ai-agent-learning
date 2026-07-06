@@ -2,7 +2,7 @@ from collections.abc import Iterator
 import logging
 
 from app.models.chat import ChatRequest, ChatResponse
-from app.services.conversation_store import ConversationStore
+from app.services.sqlite_conversation_store import SQLiteConversationStore
 from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ChatService:
     def __init__(self) -> None:
         self.llm_service = LLMService()
-        self.conversation_store = ConversationStore()
+        self.conversation_store = SQLiteConversationStore()
 
     def chat(self, request: ChatRequest) -> ChatResponse:
         logger.info(
