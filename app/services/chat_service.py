@@ -1,20 +1,18 @@
 import logging
 
-from app.core.config import get_settings
 from app.models.chat import ChatRequest, ChatResponse
+from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
-    def chat(self, request: ChatRequest) -> ChatResponse:
-        settings = get_settings()
+    def __init__(self) -> None:
+        self.llm_service = LLMService()
 
+    def chat(self, request: ChatRequest) -> ChatResponse:
         logger.info("Received chat message: %s", request.message)
 
-        reply = (
-            f"你刚才说：{request.message} "
-            f"当前使用模型：{settings.llm_provider}/{settings.llm_model}"
-        )
+        reply = self.llm_service.generate(request.message)
 
         return ChatResponse(reply=reply)

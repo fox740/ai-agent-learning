@@ -13,9 +13,13 @@ class Settings(BaseSettings):
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
-    llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
+    llm_provider: Literal["mock", "openai", "deepseek", "qwen"] = Field(
+        default="mock",
+        alias="LLM_PROVIDER",
+    )
     llm_model: str = Field(default="mock-chat-model", alias="LLM_MODEL")
-    openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
+    llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
+    llm_api_key: str = Field(default="", alias="LLM_API_KEY")
 
     model_config = SettingsConfigDict(
         env_file=".env",
