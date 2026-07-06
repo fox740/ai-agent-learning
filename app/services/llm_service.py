@@ -14,17 +14,46 @@ class LLMService:
         self.settings = get_settings()
 
     def generate(self, user_message: str) -> str:
-        if self.settings.llm_provider == "mock":
-            return self._mock_generate(user_message)
-
-        return self._openai_compatible_generate(user_message)
+        messages = self._build_single_turn_messages(user_message)
+        return self.generate_with_messages(messages)
 
     def stream_generate(self, user_message: str) -> Iterator[str]:
+        messages = self._build_single_turn_messages(user_message)
+        yield from self.stream_generate_with_messages(messages)
+
+    def generate_with_messages(self, messages: list[dict[str, str]]) -> str:
         if self.settings.llm_provider == "mock":
-            yield from self._mock_stream_generate(user_message)
+            last_user_message = self._get_last_user_message(messages)
+            return self._mock_generate(last_user_message)
+
+        return self._openai_compatible_generate(messages)
+
+    def stream_generate_with_messages(self, messages: list[dict[str, str]]) -> Iterator[str]:
+        if self.settings.llm_provider == "mock":
+            last_user_message = self._get_last_user_message(messages)
+            yield from self._mock_stream_generate(last_user_message)
             return
 
-        yield from self._openai_compatible_stream_generate(user_message)
+        yield from self._openai_compatible_stream_generate(messages)
+
+    def _build_single_turn_messages(self, user_message: str) -> list[dict[str, str]]:
+        return [
+            {
+                "role": "system",
+                "content": "你是一个严谨、清晰、耐心的 AI 学习助手。",
+            },
+            {
+                "role": "user",
+                "content": user_message,
+            },
+        ]
+
+    def _get_last_user_message(self, messages: list[dict[str, str]]) -> str:
+        for message in reversed(messages):
+            if message["role"] == "user":
+                return message["content"]
+
+        return ""
 
     def _mock_generate(self, user_message: str) -> str:
         logger.info("Using mock LLM provider")
@@ -52,7 +81,7 @@ class LLMService:
 
         return OpenAI(**client_kwargs)
 
-    def _openai_compatible_generate(self, user_message: str) -> str:
+    def _openai_compatible_generate(self, messages: list[dict[str, str]]) -> str:
         client = self._create_client()
 
         logger.info(
@@ -63,16 +92,7 @@ class LLMService:
 
         completion = client.chat.completions.create(
             model=self.settings.llm_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "你是一个严谨、清晰、耐心的 AI 学习助手。",
-                },
-                {
-                    "role": "user",
-                    "content": user_message,
-                },
-            ],
+            messages=messages,
             temperature=0.7,
         )
 
@@ -83,7 +103,10 @@ class LLMService:
 
         return content
 
-    def _openai_compatible_stream_generate(self, user_message: str) -> Iterator[str]:
+    def _openai_compatible_stream_generate(
+        self,
+        messages: list[dict[str, str]],
+    ) -> Iterator[str]:
         client = self._create_client()
 
         logger.info(
@@ -94,16 +117,7 @@ class LLMService:
 
         stream = client.chat.completions.create(
             model=self.settings.llm_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "你是一个严谨、清晰、耐心的 AI 学习助手。",
-                },
-                {
-                    "role": "user",
-                    "content": user_message,
-                },
-            ],
+            messages=messages,
             temperature=0.7,
             stream=True,
         )
