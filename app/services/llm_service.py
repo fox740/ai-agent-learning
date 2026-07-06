@@ -1,10 +1,10 @@
+from collections.abc import Iterator
 import logging
+import time
 
 from openai import OpenAI
 
 from app.core.config import get_settings
-
-from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,27 @@ class LLMService:
 
         return self._openai_compatible_generate(user_message)
 
+    def stream_generate(self, user_message: str) -> Iterator[str]:
+        if self.settings.llm_provider == "mock":
+            yield from self._mock_stream_generate(user_message)
+            return
+
+        yield from self._openai_compatible_stream_generate(user_message)
+
     def _mock_generate(self, user_message: str) -> str:
         logger.info("Using mock LLM provider")
         return f"这是 mock 模型回复：我收到了你的问题：{user_message}"
 
-    def _openai_compatible_generate(self, user_message: str) -> str:
+    def _mock_stream_generate(self, user_message: str) -> Iterator[str]:
+        logger.info("Using mock streaming LLM provider")
+
+        text = f"这是 mock 流式回复：我收到了你的问题：{user_message}"
+
+        for char in text:
+            time.sleep(0.05)
+            yield char
+
+    def _create_client(self) -> OpenAI:
         if not self.settings.llm_api_key or self.settings.llm_api_key == "your_api_key_here":
             raise ValueError("LLM_API_KEY is not configured")
 
@@ -34,7 +50,10 @@ class LLMService:
         if self.settings.llm_base_url:
             client_kwargs["base_url"] = self.settings.llm_base_url
 
-        client = OpenAI(**client_kwargs)
+        return OpenAI(**client_kwargs)
+
+    def _openai_compatible_generate(self, user_message: str) -> str:
+        client = self._create_client()
 
         logger.info(
             "Calling LLM provider=%s model=%s",
@@ -63,34 +82,9 @@ class LLMService:
             return ""
 
         return content
-    def stream_generate(self, user_message: str) -> Iterator[str]:
-        if self.settings.llm_provider == "mock":
-            yield from self._mock_stream_generate(user_message)
-            return
-
-        yield from self._openai_compatible_stream_generate(user_message)
-
-    def _mock_stream_generate(self, user_message: str) -> Iterator[str]:
-        logger.info("Using mock streaming LLM provider")
-
-        text = f"这是 mock 流式回复：我收到了你的问题：{user_message}"
-
-        for char in text:
-            yield char   
-
 
     def _openai_compatible_stream_generate(self, user_message: str) -> Iterator[str]:
-        if not self.settings.llm_api_key or self.settings.llm_api_key == "your_api_key_here":
-            raise ValueError("LLM_API_KEY is not configured")
-
-        client_kwargs = {
-            "api_key": self.settings.llm_api_key,
-        }
-
-        if self.settings.llm_base_url:
-            client_kwargs["base_url"] = self.settings.llm_base_url
-
-        client = OpenAI(**client_kwargs)
+        client = self._create_client()
 
         logger.info(
             "Streaming LLM provider=%s model=%s",
@@ -118,4 +112,3 @@ class LLMService:
             delta = chunk.choices[0].delta.content
             if delta:
                 yield delta
-    
