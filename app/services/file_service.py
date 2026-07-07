@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 
 from app.models.upload import UploadResponse
+from app.services.document_service import DocumentService
 
 
 class FileService:
@@ -10,6 +11,7 @@ class FileService:
         self.upload_dir = Path(upload_dir)
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         self.max_file_size = 1 * 1024 * 1024
+        self.document_service = DocumentService()
 
     async def save_text_file(self, file: UploadFile) -> UploadResponse:
         filename = file.filename or "unknown"
@@ -46,11 +48,21 @@ class FileService:
         file_path = self.upload_dir / filename
         file_path.write_text(text, encoding="utf-8")
 
+        document = self.document_service.create_document(
+            filename=filename,
+            file_path=str(file_path),
+            content_type=file.content_type,
+            size=size,
+            char_count=len(text),
+        )
+
         preview = text[:500]
 
         return UploadResponse(
+            document_id=document.id,
             filename=filename,
             content_type=file.content_type,
             size=size,
+            char_count=len(text),
             preview=preview,
         )
