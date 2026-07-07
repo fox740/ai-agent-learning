@@ -22,6 +22,16 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     prompt_name: str = Field(default="default", alias="PROMPT_NAME")
 
+    embedding_provider: str = Field(default="dashscope", alias="EMBEDDING_PROVIDER")
+    embedding_model: str = Field(default="text-embedding-v4", alias="EMBEDDING_MODEL")
+    embedding_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        alias="EMBEDDING_BASE_URL",
+    )
+    embedding_api_key: str = Field(default="", alias="EMBEDDING_API_KEY")
+    embedding_dim: int = Field(default=1024, alias="EMBEDDING_DIM")
+    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
