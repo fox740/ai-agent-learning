@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="mock-chat-model", alias="LLM_MODEL")
     llm_base_url: str = Field(default="", alias="LLM_BASE_URL")
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    prompt_name: str = Field(default="default", alias="PROMPT_NAME")
 
     model_config = SettingsConfigDict(
         env_file=".env",

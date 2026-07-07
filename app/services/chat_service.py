@@ -5,11 +5,15 @@ from app.models.chat import ChatRequest, ChatResponse
 from app.services.sqlite_conversation_store import SQLiteConversationStore
 from app.services.llm_service import LLMService
 
+from app.core.config import get_settings
+from app.core.prompts import get_system_prompt
+
 logger = logging.getLogger(__name__)
 
 
 class ChatService:
     def __init__(self) -> None:
+        self.settings = get_settings()
         self.llm_service = LLMService()
         self.conversation_store = SQLiteConversationStore()
 
@@ -74,10 +78,11 @@ class ChatService:
         )
 
     def _build_messages(self, history: list[dict[str, str]]) -> list[dict[str, str]]:
+        system_prompt = get_system_prompt(self.settings.prompt_name)
         return [
             {
                 "role": "system",
-                "content": "你是一个严谨、清晰、耐心的 AI 学习助手。",
+                "content": system_prompt,
             },
             *history,
         ]
