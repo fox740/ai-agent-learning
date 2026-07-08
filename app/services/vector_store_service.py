@@ -117,47 +117,72 @@ class VectorStoreService:
             dimension=row[4],
             created_at=str(row[5]),
         )
-    
     def search_similar_chunks(
         self,
         query_embedding: list[float],
         top_k: int = 3,
+        document_id: int | None = None,
+        min_score: float = 0.0,
     ) -> list[RAGSource]:
-        with self._connect() as conn:
-            cursor = conn.execute(
-                """
-                SELECT
-                    ce.chunk_id,
-                    ce.document_id,
-                    ce.embedding,
-                    dc.chunk_index,
-                    dc.content
-                FROM chunk_embeddings ce
-                JOIN document_chunks dc
-                    ON ce.chunk_id = dc.id
-                """
-            )
+        sql = """
+            SELECT
+                ce.chunk_id,
+                ce.document_id,
+                ce.embedding,
+                dc.chunk_index,
+                dc.content,
+                d.filename
+            FROM chunk_embeddings ce
+            JOIN document_chunks dc
+                ON ce.chunk_id = dc.id
+            JOIN documents d
+                ON ce.document_id = d.id
+        """
 
+        params: tuple = ()
+
+        if document_id is not None:
+            sql += """
+            WHERE ce.document_id = ?
+            """
+            params = (document_id,)
+
+        with self._connect() as conn:
+            cursor = conn.execute(sql, params)
             rows = cursor.fetchall()
 
         scored_sources: list[RAGSource] = []
+        seen_contents: set[str] = set()
 
         for row in rows:
             chunk_id = row[0]
-            document_id = row[1]
+            source_document_id = row[1]
             chunk_embedding = json.loads(row[2])
             chunk_index = row[3]
             content = row[4]
+            filename = row[5]
+
+            normalized_content = content.strip()
+
+            if normalized_content in seen_contents:
+                continue
 
             score = self._cosine_similarity(
                 query_embedding,
                 chunk_embedding,
             )
 
+            if score < min_score:
+                continue
+
+            seen_contents.add(normalized_content)
+
             scored_sources.append(
                 RAGSource(
+                    source_index=0,
                     chunk_id=chunk_id,
-                    document_id=document_id,
+                    document_id=source_document_id,
+                    filename=filename,
                     chunk_index=chunk_index,
                     score=score,
                     content=content,
@@ -166,7 +191,12 @@ class VectorStoreService:
 
         scored_sources.sort(key=lambda source: source.score, reverse=True)
 
-        return scored_sources[:top_k]
+        top_sources = scored_sources[:top_k]
+
+        return [
+            source.model_copy(update={"source_index": index})
+            for index, source in enumerate(top_sources, start=1)
+        ]
 
     def _cosine_similarity(
         self,

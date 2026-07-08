@@ -14,6 +14,8 @@ def rag_chat(request: RAGChatRequest) -> RAGChatResponse:
         return rag_service.chat(
             question=request.question,
             top_k=request.top_k,
+            document_id=request.document_id,
+            min_score=request.min_score,
         )
     except ValueError as exc:
         raise HTTPException(

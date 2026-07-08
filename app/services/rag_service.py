@@ -14,17 +14,21 @@ class RAGService:
         self,
         question: str,
         top_k: int = 3,
+        document_id: int | None = None,
+        min_score: float = 0.0,
     ) -> RAGChatResponse:
         query_embedding = self.embedding_service.embed_text(question)
 
         sources = self.vector_store_service.search_similar_chunks(
             query_embedding=query_embedding,
             top_k=top_k,
+            document_id=document_id,
+            min_score=min_score,
         )
 
         if not sources:
             return RAGChatResponse(
-                answer="当前还没有可检索的文档内容，请先上传并索引文档。",
+                answer="根据当前文档无法确定。没有检索到足够相关的参考资料。",
                 sources=[],
             )
 
@@ -50,12 +54,13 @@ class RAGService:
         system_prompt = """
 你是一个严谨的 RAG 文档问答助手。
 
-回答规则：
-1. 优先根据【参考资料】回答用户问题。
-2. 如果参考资料中没有足够信息，请明确说“根据当前文档无法确定”。
-3. 不要编造参考资料中没有出现的事实。
-4. 回答要清晰、简洁、有条理。
-5. 如果资料之间有冲突，要指出冲突。
+你必须遵守以下规则：
+1. 只能根据【参考资料】回答，不要编造参考资料中没有的信息。
+2. 如果参考资料不足以回答问题，必须回答：“根据当前文档无法确定。”
+3. 回答中尽量标注引用来源，例如：[资料1]、[资料2]。
+4. 不要把自己的常识当作文档事实。
+5. 如果多个资料内容重复，只需要综合回答一次。
+6. 回答要简洁、清楚、有条理。
 """.strip()
 
         user_prompt = f"""
@@ -65,7 +70,7 @@ class RAGService:
 【用户问题】
 {question}
 
-请基于参考资料回答用户问题。
+请严格基于参考资料回答用户问题，并在关键结论后标注资料编号。
 """.strip()
 
         return [
@@ -82,10 +87,11 @@ class RAGService:
     def _build_context(self, sources: list[RAGSource]) -> str:
         context_parts = []
 
-        for index, source in enumerate(sources, start=1):
+        for source in sources:
             context_parts.append(
                 f"""
-[资料 {index}]
+[资料{source.source_index}]
+filename: {source.filename}
 document_id: {source.document_id}
 chunk_id: {source.chunk_id}
 chunk_index: {source.chunk_index}
