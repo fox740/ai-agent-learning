@@ -6,6 +6,7 @@ from app.core.logging import setup_logging
 from app.api.upload import router as upload_router
 from app.api.documents import router as documents_router
 from app.api.embeddings import router as embeddings_router
+from app.api.rag import router as rag_router
 
 setup_logging()
 settings = get_settings()
@@ -20,6 +21,7 @@ app.include_router(chat_router)
 app.include_router(upload_router)
 app.include_router(documents_router)
 app.include_router(embeddings_router)
+app.include_router(rag_router)
 
 
 @app.get("/")

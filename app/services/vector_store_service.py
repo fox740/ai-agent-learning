@@ -4,6 +4,9 @@ from pathlib import Path
 
 from app.models.vector import ChunkEmbeddingResponse
 
+import math
+from app.models.rag import RAGSource
+
 
 class VectorStoreService:
     def __init__(self, db_path: str = "data/chat_history.db") -> None:
@@ -114,3 +117,70 @@ class VectorStoreService:
             dimension=row[4],
             created_at=str(row[5]),
         )
+    
+    def search_similar_chunks(
+        self,
+        query_embedding: list[float],
+        top_k: int = 3,
+    ) -> list[RAGSource]:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT
+                    ce.chunk_id,
+                    ce.document_id,
+                    ce.embedding,
+                    dc.chunk_index,
+                    dc.content
+                FROM chunk_embeddings ce
+                JOIN document_chunks dc
+                    ON ce.chunk_id = dc.id
+                """
+            )
+
+            rows = cursor.fetchall()
+
+        scored_sources: list[RAGSource] = []
+
+        for row in rows:
+            chunk_id = row[0]
+            document_id = row[1]
+            chunk_embedding = json.loads(row[2])
+            chunk_index = row[3]
+            content = row[4]
+
+            score = self._cosine_similarity(
+                query_embedding,
+                chunk_embedding,
+            )
+
+            scored_sources.append(
+                RAGSource(
+                    chunk_id=chunk_id,
+                    document_id=document_id,
+                    chunk_index=chunk_index,
+                    score=score,
+                    content=content,
+                )
+            )
+
+        scored_sources.sort(key=lambda source: source.score, reverse=True)
+
+        return scored_sources[:top_k]
+
+    def _cosine_similarity(
+        self,
+        vector_a: list[float],
+        vector_b: list[float],
+    ) -> float:
+        if len(vector_a) != len(vector_b):
+            raise ValueError("Embedding dimensions do not match")
+
+        dot_product = sum(a * b for a, b in zip(vector_a, vector_b))
+        norm_a = math.sqrt(sum(a * a for a in vector_a))
+        norm_b = math.sqrt(sum(b * b for b in vector_b))
+
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+
+        return dot_product / (norm_a * norm_b)
