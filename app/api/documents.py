@@ -7,11 +7,15 @@ from app.services.document_service import DocumentService
 from app.models.vector import ChunkEmbeddingListResponse
 from app.services.embedding_service import EmbeddingService
 from app.services.vector_store_service import VectorStoreService
+from app.models.index import DocumentIndexResponse
+from app.services.document_index_service import DocumentIndexService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 document_service = DocumentService()
 chunk_service = ChunkService()
+
+document_index_service = DocumentIndexService()
 embedding_service = EmbeddingService()
 vector_store_service = VectorStoreService()
 
@@ -159,3 +163,35 @@ def get_document_embeddings(document_id: int) -> ChunkEmbeddingListResponse:
         embeddings=embeddings,
         count=len(embeddings),
     )
+
+
+@router.post("/{document_id}/index", response_model=DocumentIndexResponse)
+def index_document(
+    document_id: int,
+    chunk_size: int = Query(default=500, ge=100, le=5000),
+    chunk_overlap: int = Query(default=100, ge=0, le=1000),
+) -> DocumentIndexResponse:
+    document = document_service.get_document(document_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    try:
+        return document_index_service.index_document(
+            document=document,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
